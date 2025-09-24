@@ -1012,32 +1012,27 @@ Welcome to the comprehensive admin interface! Here you can:
             await update.message.reply_text(f"❌ Error retrieving admin actions: {e}")
     
     async def _update_donation_confirmed_status(self, user_id: str, confirmed: bool):
-        """Update donation_confirmed status in main bot's database"""
+        """Update donation_confirmed status by sending command to main bot"""
         try:
-            import sqlite3
-            import os
+            from telegram import Bot
             
-            # Connect to main bot's database
-            main_bot_db_path = os.path.join(os.path.dirname(__file__), '..', 'HackReality-MainBot', 'bot_database.db')
-            
-            if not os.path.exists(main_bot_db_path):
-                logger.error(f"Main bot database not found at {main_bot_db_path}")
+            if not self.main_bot_token:
+                logger.error("MAIN_BOT_TOKEN not found, cannot update donation status")
                 return False
+                
+            main_bot = Bot(token=self.main_bot_token)
+            logger.info(f"Updating donation_confirmed to {confirmed} for user {user_id} via main bot")
             
-            conn = sqlite3.connect(main_bot_db_path)
-            cursor = conn.cursor()
+            # Send a special command to the main bot to update the donation status
+            command = f"/admin_set_donation_confirmed_{user_id}_{int(confirmed)}"
             
-            # Update donation_confirmed field
-            cursor.execute('''
-                UPDATE user_states 
-                SET donation_confirmed = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = ?
-            ''', (int(confirmed), int(user_id)))
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text=command,
+                parse_mode=None
+            )
+            logger.info(f"Sent donation update command to main bot for user {user_id}: {command}")
             
-            conn.commit()
-            conn.close()
-            
-            logger.info(f"Updated donation_confirmed to {confirmed} for user {user_id} in main bot database")
             return True
             
         except Exception as e:
