@@ -40,6 +40,9 @@ class CompleteAdminBot:
         self.application = Application.builder().token(self.token).build()
         self._setup_handlers()
         
+        # Initialize admin database
+        self._init_admin_database()
+        
         # Admin configuration (moved from main bot)
         self.admin_config = {
             'telegram_username': '@dapavl',
@@ -55,6 +58,66 @@ class CompleteAdminBot:
                 'general': True
             }
         }
+    
+    def _init_admin_database(self):
+        """Initialize admin database for tracking admin actions"""
+        try:
+            import sqlite3
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            cursor = conn.cursor()
+            
+            # Create admin actions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS admin_actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_user_id INTEGER NOT NULL,
+                    action_type TEXT NOT NULL,
+                    target_user_id INTEGER,
+                    action_data TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'completed'
+                )
+            ''')
+            
+            # Create admin logs table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS admin_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_user_id INTEGER NOT NULL,
+                    log_level TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    context TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            conn.commit()
+            conn.close()
+            logger.info("Admin database initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize admin database: {e}")
+    
+    def _log_admin_action(self, admin_user_id: int, action_type: str, target_user_id: int = None, action_data: str = None):
+        """Log admin action to database"""
+        try:
+            import sqlite3
+            import json
+            
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO admin_actions (admin_user_id, action_type, target_user_id, action_data, timestamp)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (admin_user_id, action_type, target_user_id, action_data))
+            
+            conn.commit()
+            conn.close()
+            logger.info(f"Logged admin action: {action_type} for user {target_user_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to log admin action: {e}")
     
     def _setup_handlers(self):
         """Setup command and message handlers"""
@@ -73,6 +136,9 @@ class CompleteAdminBot:
         self.application.add_handler(CommandHandler("users", self.users_command))
         self.application.add_handler(CommandHandler("notify", self.notify_command))
         self.application.add_handler(CommandHandler("broadcast", self.broadcast_command))
+        
+        # Admin actions command
+        self.application.add_handler(CommandHandler("admin_actions", self.admin_actions_command))
         
         # System commands
         self.application.add_handler(CommandHandler("system", self.system_command))
@@ -799,6 +865,15 @@ Welcome to the comprehensive admin interface! Here you can:
         try:
             # Extract user ID from callback data
             user_id = callback_data.replace("confirm_donation_", "")
+            admin_user_id = update.effective_user.id
+            
+            # Log admin action to database
+            self._log_admin_action(
+                admin_user_id=admin_user_id,
+                action_type="donation_confirmed",
+                target_user_id=int(user_id),
+                action_data=f"Admin confirmed donation for user {user_id}"
+            )
             
             # Update user state to proceed to setup
             await self._update_user_state_to_setup(user_id)
@@ -827,6 +902,15 @@ Welcome to the comprehensive admin interface! Here you can:
         try:
             # Extract user ID from callback data
             user_id = callback_data.replace("reject_donation_", "")
+            admin_user_id = update.effective_user.id
+            
+            # Log admin action to database
+            self._log_admin_action(
+                admin_user_id=admin_user_id,
+                action_type="donation_rejected",
+                target_user_id=int(user_id),
+                action_data=f"Admin rejected donation for user {user_id}"
+            )
             
             # Send rejection message to user via main bot
             await self._notify_user_donation_rejected(user_id)
@@ -859,6 +943,61 @@ Welcome to the comprehensive admin interface! Here you can:
             
         except Exception as e:
             logger.error(f"Error in donation confirmation process: {e}")
+    
+    async def admin_actions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /admin_actions command - show recent admin actions"""
+        if not self._check_admin_access(update.effective_user.id):
+            await update.message.reply_text("❌ Access denied. Admin only.")
+            return
+        
+        try:
+            import sqlite3
+            
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            cursor = conn.cursor()
+            
+            # Get recent admin actions
+            cursor.execute('''
+                SELECT action_type, target_user_id, action_data, timestamp, status
+                FROM admin_actions 
+                ORDER BY timestamp DESC 
+                LIMIT 10
+            ''')
+            
+            actions = cursor.fetchall()
+            conn.close()
+            
+            if not actions:
+                await update.message.reply_text("📋 **Admin Actions**\n\nNo admin actions recorded yet.")
+                return
+            
+            # Format actions
+            actions_text = "📋 **Recent Admin Actions**\n\n"
+            
+            for action in actions:
+                action_type, target_user_id, action_data, timestamp, status = action
+                
+                # Format action type
+                if action_type == "donation_confirmed":
+                    action_emoji = "✅"
+                    action_desc = "Confirmed Donation"
+                elif action_type == "donation_rejected":
+                    action_emoji = "❌"
+                    action_desc = "Rejected Donation"
+                else:
+                    action_emoji = "🔧"
+                    action_desc = action_type.replace("_", " ").title()
+                
+                actions_text += f"{action_emoji} **{action_desc}**\n"
+                actions_text += f"   User: {target_user_id}\n"
+                actions_text += f"   Time: {timestamp}\n"
+                actions_text += f"   Status: {status}\n\n"
+            
+            await update.message.reply_text(actions_text, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error in admin_actions_command: {e}")
+            await update.message.reply_text(f"❌ Error retrieving admin actions: {e}")
     
     async def _notify_user_donation_confirmed(self, user_id: str):
         """Notify user that their donation has been confirmed"""
