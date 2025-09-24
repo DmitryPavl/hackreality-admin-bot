@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class CompleteAdminBot:
     def __init__(self):
         self.token = os.getenv('ADMIN_BOT_TOKEN')
-        self.main_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        self.main_bot_token = os.getenv('MAIN_BOT_TOKEN')
         self.admin_user_id = int(os.getenv('ADMIN_USER_ID', '41107472'))
         self.db_path = os.getenv('DATABASE_PATH', 'bot_database.db')
         
@@ -889,7 +889,13 @@ Welcome to the comprehensive admin interface! Here you can:
         """Notify user that their donation has been confirmed"""
         try:
             from telegram import Bot
+            
+            if not self.main_bot_token:
+                logger.error("MAIN_BOT_TOKEN not found, cannot notify user")
+                return
+                
             main_bot = Bot(token=self.main_bot_token)
+            logger.info(f"Sending donation confirmation to user {user_id} via main bot")
             
             confirmation_message = """
 ✅ **Донат подтвержден!**
@@ -901,35 +907,53 @@ Welcome to the comprehensive admin interface! Here you can:
 Переходим к настройке процесса... ⚙️
             """
             
-            # Send confirmation message
+            # Send confirmation message to the user via main bot
             await main_bot.send_message(
-                chat_id=user_id,
+                chat_id=int(user_id),
                 text=confirmation_message,
                 parse_mode='Markdown'
             )
+            logger.info(f"Sent confirmation message to user {user_id}")
+            
+            # Add a small delay to ensure message order
+            import asyncio
+            await asyncio.sleep(1)
             
             # Send a special trigger message that main bot will recognize
             await main_bot.send_message(
-                chat_id=user_id,
+                chat_id=int(user_id),
                 text="🚀 Начинаем настройку!",
                 parse_mode='Markdown'
             )
+            logger.info(f"Sent setup trigger message to user {user_id}")
+            
+            # Add another small delay
+            await asyncio.sleep(1)
             
             # Send a hidden trigger message to start setup
             await main_bot.send_message(
-                chat_id=user_id,
+                chat_id=int(user_id),
                 text="/start_setup",
                 parse_mode='Markdown'
             )
+            logger.info(f"Sent /start_setup command to user {user_id}")
             
         except Exception as e:
-            logger.error(f"Error notifying user of confirmation: {e}")
+            logger.error(f"Error notifying user {user_id} of confirmation: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
     
     async def _notify_user_donation_rejected(self, user_id: str):
         """Notify user that their donation was not confirmed"""
         try:
             from telegram import Bot
+            
+            if not self.main_bot_token:
+                logger.error("MAIN_BOT_TOKEN not found, cannot notify user")
+                return
+                
             main_bot = Bot(token=self.main_bot_token)
+            logger.info(f"Sending donation rejection to user {user_id} via main bot")
             
             rejection_message = """
 ❌ **Донат не подтвержден**
@@ -950,13 +974,16 @@ Welcome to the comprehensive admin interface! Here you can:
             """
             
             await main_bot.send_message(
-                chat_id=user_id,
+                chat_id=int(user_id),
                 text=rejection_message,
                 parse_mode='Markdown'
             )
+            logger.info(f"Sent rejection message to user {user_id}")
             
         except Exception as e:
-            logger.error(f"Error notifying user of rejection: {e}")
+            logger.error(f"Error notifying user {user_id} of rejection: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
     
     async def run(self):
         """Run the admin bot"""

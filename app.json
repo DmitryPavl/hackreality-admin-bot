@@ -20,6 +20,10 @@
     "ADMIN_TELEGRAM_ID": {
       "description": "Your Telegram user ID (same as ADMIN_USER_ID)",
       "required": true
+    },
+    "MAIN_BOT_TOKEN": {
+      "description": "Main bot token to send messages to users",
+      "required": true
     }
   },
   "formation": {
