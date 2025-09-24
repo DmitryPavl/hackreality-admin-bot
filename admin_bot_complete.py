@@ -1052,6 +1052,14 @@ Welcome to the comprehensive admin interface! Here you can:
             )
             logger.info(f"Sent /start_setup command to user {user_id}")
             
+            # Also send a visible message to help debug
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text="🔧 Если настройка не началась автоматически, отправь команду /start_setup",
+                parse_mode='Markdown'
+            )
+            logger.info(f"Sent debug message to user {user_id}")
+            
         except Exception as e:
             logger.error(f"Error notifying user {user_id} of confirmation: {e}")
             import traceback
