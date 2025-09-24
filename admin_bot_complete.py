@@ -767,6 +767,10 @@ Welcome to the comprehensive admin interface! Here you can:
             )
         elif query.data == "admin_logs":
             await self.logs_command(update, context)
+        elif query.data.startswith("confirm_donation_"):
+            await self._handle_donation_confirmation(update, context, query.data)
+        elif query.data.startswith("reject_donation_"):
+            await self._handle_donation_rejection(update, context, query.data)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages"""
@@ -789,6 +793,137 @@ Welcome to the comprehensive admin interface! Here you can:
                 parse_mode='Markdown',
                 reply_markup=reply_markup
             )
+    
+    async def _handle_donation_confirmation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
+        """Handle admin confirmation of donation"""
+        try:
+            # Extract user ID from callback data
+            user_id = callback_data.replace("confirm_donation_", "")
+            
+            # Update user state to proceed to setup
+            await self._update_user_state_to_setup(user_id)
+            
+            # Send confirmation to user via main bot
+            await self._notify_user_donation_confirmed(user_id)
+            
+            # Update admin message
+            await update.callback_query.edit_message_text(
+                f"✅ **Donation Confirmed!**\n\n"
+                f"User ID: {user_id}\n"
+                f"Status: Proceeding to setup phase\n"
+                f"Confirmed by: Admin\n"
+                f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"Admin confirmed donation for user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error confirming donation: {e}")
+            await update.callback_query.edit_message_text("❌ Error confirming donation.")
+    
+    async def _handle_donation_rejection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
+        """Handle admin rejection of donation"""
+        try:
+            # Extract user ID from callback data
+            user_id = callback_data.replace("reject_donation_", "")
+            
+            # Send rejection message to user via main bot
+            await self._notify_user_donation_rejected(user_id)
+            
+            # Update admin message
+            await update.callback_query.edit_message_text(
+                f"❌ **Donation Rejected**\n\n"
+                f"User ID: {user_id}\n"
+                f"Status: Payment not confirmed\n"
+                f"Rejected by: Admin\n"
+                f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"Admin rejected donation for user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error rejecting donation: {e}")
+            await update.callback_query.edit_message_text("❌ Error rejecting donation.")
+    
+    async def _update_user_state_to_setup(self, user_id: str):
+        """Update user state to proceed to setup phase"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Update user state to setup
+            cursor.execute("""
+                UPDATE user_states 
+                SET state = 'setup', 
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            """, (user_id,))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"Error updating user state: {e}")
+    
+    async def _notify_user_donation_confirmed(self, user_id: str):
+        """Notify user that their donation has been confirmed"""
+        try:
+            from telegram import Bot
+            main_bot = Bot(token=self.main_bot_token)
+            
+            confirmation_message = """
+✅ **Донат подтвержден!**
+
+Спасибо за поддержку! Администратор подтвердил получение твоего доната.
+
+🎯 **Теперь мы можем приступить к работе над твоей целью!**
+
+Переходим к настройке процесса... ⚙️
+            """
+            
+            await main_bot.send_message(
+                chat_id=user_id,
+                text=confirmation_message,
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error notifying user of confirmation: {e}")
+    
+    async def _notify_user_donation_rejected(self, user_id: str):
+        """Notify user that their donation was not confirmed"""
+        try:
+            from telegram import Bot
+            main_bot = Bot(token=self.main_bot_token)
+            
+            rejection_message = """
+❌ **Донат не подтвержден**
+
+К сожалению, администратор не смог подтвердить получение твоего доната.
+
+**Возможные причины:**
+• Донат еще не поступил
+• Неправильная сумма
+• Технические проблемы
+
+**Что делать:**
+• Проверь правильность перевода
+• Убедись, что сумма соответствует выбранному плану
+• Попробуй еще раз
+
+Если ты уверен, что перевел правильно, обратись к администратору.
+            """
+            
+            await main_bot.send_message(
+                chat_id=user_id,
+                text=rejection_message,
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error notifying user of rejection: {e}")
     
     async def run(self):
         """Run the admin bot"""
