@@ -934,25 +934,22 @@ Welcome to the comprehensive admin interface! Here you can:
     async def _update_user_state_to_setup(self, user_id: str):
         """Update user state to proceed to setup phase"""
         try:
-            import sqlite3
-            import json
+            from telegram import Bot
             
-            # Update the main bot's database directly
-            # This is necessary because the admin bot needs to update the user's state
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            cursor = conn.cursor()
+            if not self.main_bot_token:
+                logger.error("MAIN_BOT_TOKEN not found, cannot update user state")
+                return
+                
+            main_bot = Bot(token=self.main_bot_token)
+            logger.info(f"Sending state update command to main bot for user {user_id}")
             
-            # Update user state to "setup"
-            cursor.execute("BEGIN TRANSACTION")
-            cursor.execute('''
-                INSERT OR REPLACE INTO user_states (user_id, current_state, state_data, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (int(user_id), "setup", json.dumps({"setup_step": 0, "setup_completed": False})))
-            cursor.execute("COMMIT")
-            
-            conn.close()
-            logger.info(f"Updated user {user_id} state to 'setup' in main bot database")
+            # Send a special command to the main bot to update the user's state
+            # The main bot will recognize this as a state update command
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text="/admin_update_state_to_setup"
+            )
+            logger.info(f"Sent state update command to main bot for user {user_id}")
             
         except Exception as e:
             logger.error(f"Error updating user state to setup: {e}")
