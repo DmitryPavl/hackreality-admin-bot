@@ -85,3 +85,5 @@ After setting the environment variables:
 4. All admin notifications will work properly
 
 **Remember to restart the admin bot after setting the environment variables!**
+
+

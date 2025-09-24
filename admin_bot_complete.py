@@ -1023,54 +1023,35 @@ Welcome to the comprehensive admin interface! Here you can:
             main_bot = Bot(token=self.main_bot_token)
             logger.info(f"Sending donation confirmation to user {user_id} via main bot")
             
-            confirmation_message = """
-✅ **Донат подтвержден!**
+            # Send the admin command to update user state to setup
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text="/admin_update_state_to_setup",
+                parse_mode=None  # No markdown parsing for commands
+            )
+            logger.info(f"Sent /admin_update_state_to_setup command to main bot for user {user_id}")
+            
+            # Add a small delay to ensure the command is processed
+            import asyncio
+            await asyncio.sleep(2)
+            
+            # Send confirmation message to the user via main bot
+            confirmation_message = """✅ Донат подтвержден!
 
 Спасибо за поддержку! Администратор подтвердил получение твоего доната.
 
-🎯 **Теперь мы можем приступить к работе над твоей целью!**
+🎯 Теперь мы можем приступить к работе над твоей целью!
 
 Переходим к настройке процесса... ⚙️
-            """
+
+🚀 Начинаем настройку!"""
             
-            # Send confirmation message to the user via main bot
             await main_bot.send_message(
                 chat_id=int(user_id),
                 text=confirmation_message,
-                parse_mode='Markdown'
+                parse_mode=None  # No markdown to avoid parsing errors
             )
             logger.info(f"Sent confirmation message to user {user_id}")
-            
-            # Add a small delay to ensure message order
-            import asyncio
-            await asyncio.sleep(1)
-            
-            # Send a special trigger message that main bot will recognize
-            await main_bot.send_message(
-                chat_id=int(user_id),
-                text="🚀 Начинаем настройку!",
-                parse_mode='Markdown'
-            )
-            logger.info(f"Sent setup trigger message to user {user_id}")
-            
-            # Add another small delay
-            await asyncio.sleep(1)
-            
-            # Send a hidden trigger message to start setup
-            await main_bot.send_message(
-                chat_id=int(user_id),
-                text="/start_setup",
-                parse_mode='Markdown'
-            )
-            logger.info(f"Sent /start_setup command to user {user_id}")
-            
-            # Also send a visible message to help debug
-            await main_bot.send_message(
-                chat_id=int(user_id),
-                text="🔧 Если настройка не началась автоматически, отправь команду /start_setup",
-                parse_mode='Markdown'
-            )
-            logger.info(f"Sent debug message to user {user_id}")
             
         except Exception as e:
             logger.error(f"Error notifying user {user_id} of confirmation: {e}")
