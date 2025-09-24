@@ -875,8 +875,8 @@ Welcome to the comprehensive admin interface! Here you can:
                 action_data=f"Admin confirmed donation for user {user_id}"
             )
             
-            # Update user state to proceed to setup in main bot's database
-            await self._update_user_state_to_setup(user_id)
+            # Update donation_confirmed field in main bot's database
+            await self._update_donation_confirmed_status(user_id, True)
             
             # Send confirmation to user via main bot
             await self._notify_user_donation_confirmed(user_id)
@@ -1011,6 +1011,41 @@ Welcome to the comprehensive admin interface! Here you can:
             logger.error(f"Error in admin_actions_command: {e}")
             await update.message.reply_text(f"❌ Error retrieving admin actions: {e}")
     
+    async def _update_donation_confirmed_status(self, user_id: str, confirmed: bool):
+        """Update donation_confirmed status in main bot's database"""
+        try:
+            import sqlite3
+            import os
+            
+            # Connect to main bot's database
+            main_bot_db_path = os.path.join(os.path.dirname(__file__), '..', 'HackReality-MainBot', 'bot_database.db')
+            
+            if not os.path.exists(main_bot_db_path):
+                logger.error(f"Main bot database not found at {main_bot_db_path}")
+                return False
+            
+            conn = sqlite3.connect(main_bot_db_path)
+            cursor = conn.cursor()
+            
+            # Update donation_confirmed field
+            cursor.execute('''
+                UPDATE user_states 
+                SET donation_confirmed = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            ''', (int(confirmed), int(user_id)))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"Updated donation_confirmed to {confirmed} for user {user_id} in main bot database")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating donation_confirmed status for user {user_id}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+
     async def _notify_user_donation_confirmed(self, user_id: str):
         """Notify user that their donation has been confirmed"""
         try:
@@ -1040,19 +1075,6 @@ Welcome to the comprehensive admin interface! Here you can:
                 parse_mode=None  # No markdown to avoid parsing errors
             )
             logger.info(f"Sent confirmation message to user {user_id}")
-            
-            # Add a small delay to ensure the message is processed
-            import asyncio
-            await asyncio.sleep(1)
-            
-            # Try a different approach - send a command instead of a message
-            # Send the /start_setup command to trigger the setup process
-            await main_bot.send_message(
-                chat_id=int(user_id),
-                text="/start_setup",
-                parse_mode=None
-            )
-            logger.info(f"Sent /start_setup command to user {user_id} via main bot")
             
         except Exception as e:
             logger.error(f"Error notifying user {user_id} of confirmation: {e}")
