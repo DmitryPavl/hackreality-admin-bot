@@ -850,40 +850,15 @@ Welcome to the comprehensive admin interface! Here you can:
     async def _update_user_state_to_setup(self, user_id: str):
         """Update user state to proceed to setup phase"""
         try:
-            # Use connection with proper error handling and timeout
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
-            cursor = conn.cursor()
+            # Admin bot should not manage main bot's database directly
+            # Instead, we'll send a special command to the main bot to update the state
+            logger.info(f"Admin confirmed donation for user {user_id} - main bot will handle state update")
             
-            # Use transaction for atomicity
-            cursor.execute("BEGIN TRANSACTION")
+            # The main bot will handle the state update when it receives the /start_setup command
+            # This is cleaner separation of concerns
             
-            # Update user state to setup (main bot will initialize setup data)
-            cursor.execute("""
-                UPDATE user_states 
-                SET state = 'setup', 
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = ?
-            """, (user_id,))
-            
-            # Check if update was successful
-            if cursor.rowcount == 0:
-                logger.warning(f"No user found with ID {user_id} to update state")
-                cursor.execute("ROLLBACK")
-            else:
-                cursor.execute("COMMIT")
-                logger.info(f"Updated user {user_id} state to setup")
-            
-            conn.close()
-            
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e):
-                logger.error(f"Database locked when updating user {user_id} state, retrying...")
-                # Could implement retry logic here
-            else:
-                logger.error(f"Database error updating user state: {e}")
         except Exception as e:
-            logger.error(f"Error updating user state: {e}")
+            logger.error(f"Error in donation confirmation process: {e}")
     
     async def _notify_user_donation_confirmed(self, user_id: str):
         """Notify user that their donation has been confirmed"""
