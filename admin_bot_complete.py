@@ -1012,18 +1012,86 @@ Welcome to the comprehensive admin interface! Here you can:
             await update.message.reply_text(f"❌ Error retrieving admin actions: {e}")
     
     async def _update_donation_confirmed_status(self, user_id: str, confirmed: bool):
-        """Update donation_confirmed status by sending command to main bot"""
+        """Update donation_confirmed status using multiple approaches"""
+        try:
+            logger.info(f"Updating donation_confirmed to {confirmed} for user {user_id}")
+            
+            # Approach 1: Try direct database access first
+            success = await self._update_donation_confirmed_direct(user_id, confirmed)
+            if success:
+                logger.info(f"✅ Direct database update successful for user {user_id}")
+                return True
+            
+            # Approach 2: Try command-based communication
+            success = await self._update_donation_confirmed_command(user_id, confirmed)
+            if success:
+                logger.info(f"✅ Command-based update successful for user {user_id}")
+                return True
+            
+            # Approach 3: Try shared file approach
+            success = await self._update_donation_confirmed_file(user_id, confirmed)
+            if success:
+                logger.info(f"✅ File-based update successful for user {user_id}")
+                return True
+            
+            logger.error(f"❌ All update methods failed for user {user_id}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error updating donation_confirmed status for user {user_id}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+    
+    async def _update_donation_confirmed_direct(self, user_id: str, confirmed: bool):
+        """Try direct database access"""
+        try:
+            import sqlite3
+            import os
+            
+            # Try to find main bot database
+            possible_paths = [
+                os.path.join(os.path.dirname(__file__), '..', 'HackReality-MainBot', 'bot_database.db'),
+                '/app/bot_database.db',  # Heroku path
+                'bot_database.db'  # Current directory
+            ]
+            
+            for db_path in possible_paths:
+                if os.path.exists(db_path):
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('''
+                        UPDATE user_states 
+                        SET donation_confirmed = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = ?
+                    ''', (int(confirmed), int(user_id)))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    logger.info(f"Direct database update successful via {db_path}")
+                    return True
+            
+            logger.warning("Main bot database not found for direct access")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"Direct database update failed: {e}")
+            return False
+    
+    async def _update_donation_confirmed_command(self, user_id: str, confirmed: bool):
+        """Try command-based communication"""
         try:
             from telegram import Bot
             
             if not self.main_bot_token:
-                logger.error("MAIN_BOT_TOKEN not found, cannot update donation status")
+                logger.warning("MAIN_BOT_TOKEN not found for command-based update")
                 return False
                 
             main_bot = Bot(token=self.main_bot_token)
-            logger.info(f"Updating donation_confirmed to {confirmed} for user {user_id} via main bot")
             
-            # Send a special command to the main bot to update the donation status
+            # Send a special command to the main bot
             command = f"/admin_set_donation_confirmed_{user_id}_{int(confirmed)}"
             
             await main_bot.send_message(
@@ -1031,14 +1099,49 @@ Welcome to the comprehensive admin interface! Here you can:
                 text=command,
                 parse_mode=None
             )
-            logger.info(f"Sent donation update command to main bot for user {user_id}: {command}")
             
+            logger.info(f"Command-based update sent: {command}")
             return True
             
         except Exception as e:
-            logger.error(f"Error updating donation_confirmed status for user {user_id}: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.warning(f"Command-based update failed: {e}")
+            return False
+    
+    async def _update_donation_confirmed_file(self, user_id: str, confirmed: bool):
+        """Try shared file approach"""
+        try:
+            import json
+            import os
+            from datetime import datetime
+            
+            # Create a shared state file
+            state_file = "/tmp/donation_states.json"
+            
+            # Read existing states
+            states = {}
+            if os.path.exists(state_file):
+                try:
+                    with open(state_file, 'r') as f:
+                        states = json.load(f)
+                except:
+                    states = {}
+            
+            # Update the state
+            states[str(user_id)] = {
+                "donation_confirmed": confirmed,
+                "updated_at": datetime.now().isoformat(),
+                "updated_by": "admin_bot"
+            }
+            
+            # Write back to file
+            with open(state_file, 'w') as f:
+                json.dump(states, f, indent=2)
+            
+            logger.info(f"File-based update successful for user {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"File-based update failed: {e}")
             return False
 
     async def _notify_user_donation_confirmed(self, user_id: str):
