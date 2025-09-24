@@ -1045,13 +1045,14 @@ Welcome to the comprehensive admin interface! Here you can:
             import asyncio
             await asyncio.sleep(1)
             
-            # Send the ADMIN_CONFIRM_DONATION trigger message
+            # Try a different approach - send a command instead of a message
+            # Send the /start_setup command to trigger the setup process
             await main_bot.send_message(
                 chat_id=int(user_id),
-                text="ADMIN_CONFIRM_DONATION",
+                text="/start_setup",
                 parse_mode=None
             )
-            logger.info(f"Sent ADMIN_CONFIRM_DONATION trigger to user {user_id} via main bot")
+            logger.info(f"Sent /start_setup command to user {user_id} via main bot")
             
         except Exception as e:
             logger.error(f"Error notifying user {user_id} of confirmation: {e}")
