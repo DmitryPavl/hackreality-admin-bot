@@ -853,7 +853,7 @@ Welcome to the comprehensive admin interface! Here you can:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Update user state to setup
+            # Update user state to setup (main bot will initialize setup data)
             cursor.execute("""
                 UPDATE user_states 
                 SET state = 'setup', 
@@ -863,6 +863,8 @@ Welcome to the comprehensive admin interface! Here you can:
             
             conn.commit()
             conn.close()
+            
+            logger.info(f"Updated user {user_id} state to setup")
             
         except Exception as e:
             logger.error(f"Error updating user state: {e}")
@@ -883,9 +885,23 @@ Welcome to the comprehensive admin interface! Here you can:
 Переходим к настройке процесса... ⚙️
             """
             
+            # Send confirmation message
             await main_bot.send_message(
                 chat_id=user_id,
                 text=confirmation_message,
+                parse_mode='Markdown'
+            )
+            
+            # Send a follow-up message to trigger setup
+            setup_trigger_message = """
+🚀 **Начинаем настройку!**
+
+Напиши любое сообщение, чтобы начать процесс настройки твоих задач и фокуса.
+            """
+            
+            await main_bot.send_message(
+                chat_id=user_id,
+                text=setup_trigger_message,
                 parse_mode='Markdown'
             )
             
