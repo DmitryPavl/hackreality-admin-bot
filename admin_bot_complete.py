@@ -892,16 +892,17 @@ Welcome to the comprehensive admin interface! Here you can:
                 parse_mode='Markdown'
             )
             
-            # Send a follow-up message to trigger setup
-            setup_trigger_message = """
-🚀 **Начинаем настройку!**
-
-Напиши любое сообщение, чтобы начать процесс настройки твоих задач и фокуса.
-            """
-            
+            # Send a special trigger message that main bot will recognize
             await main_bot.send_message(
                 chat_id=user_id,
-                text=setup_trigger_message,
+                text="🚀 Начинаем настройку!",
+                parse_mode='Markdown'
+            )
+            
+            # Send a hidden trigger message to start setup
+            await main_bot.send_message(
+                chat_id=user_id,
+                text="/start_setup",
                 parse_mode='Markdown'
             )
             
