@@ -850,8 +850,13 @@ Welcome to the comprehensive admin interface! Here you can:
     async def _update_user_state_to_setup(self, user_id: str):
         """Update user state to proceed to setup phase"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            # Use connection with proper error handling and timeout
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
             cursor = conn.cursor()
+            
+            # Use transaction for atomicity
+            cursor.execute("BEGIN TRANSACTION")
             
             # Update user state to setup (main bot will initialize setup data)
             cursor.execute("""
@@ -861,11 +866,22 @@ Welcome to the comprehensive admin interface! Here you can:
                 WHERE user_id = ?
             """, (user_id,))
             
-            conn.commit()
+            # Check if update was successful
+            if cursor.rowcount == 0:
+                logger.warning(f"No user found with ID {user_id} to update state")
+                cursor.execute("ROLLBACK")
+            else:
+                cursor.execute("COMMIT")
+                logger.info(f"Updated user {user_id} state to setup")
+            
             conn.close()
             
-            logger.info(f"Updated user {user_id} state to setup")
-            
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.error(f"Database locked when updating user {user_id} state, retrying...")
+                # Could implement retry logic here
+            else:
+                logger.error(f"Database error updating user state: {e}")
         except Exception as e:
             logger.error(f"Error updating user state: {e}")
     
