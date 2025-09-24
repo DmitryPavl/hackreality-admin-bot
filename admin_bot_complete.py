@@ -875,7 +875,7 @@ Welcome to the comprehensive admin interface! Here you can:
                 action_data=f"Admin confirmed donation for user {user_id}"
             )
             
-            # Update user state to proceed to setup
+            # Update user state to proceed to setup in main bot's database
             await self._update_user_state_to_setup(user_id)
             
             # Send confirmation to user via main bot
@@ -934,15 +934,30 @@ Welcome to the comprehensive admin interface! Here you can:
     async def _update_user_state_to_setup(self, user_id: str):
         """Update user state to proceed to setup phase"""
         try:
-            # Admin bot should not manage main bot's database directly
-            # Instead, we'll send a special command to the main bot to update the state
-            logger.info(f"Admin confirmed donation for user {user_id} - main bot will handle state update")
+            import sqlite3
+            import json
             
-            # The main bot will handle the state update when it receives the /start_setup command
-            # This is cleaner separation of concerns
+            # Update the main bot's database directly
+            # This is necessary because the admin bot needs to update the user's state
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            cursor = conn.cursor()
+            
+            # Update user state to "setup"
+            cursor.execute("BEGIN TRANSACTION")
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_states (user_id, current_state, state_data, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (int(user_id), "setup", json.dumps({"setup_step": 0, "setup_completed": False})))
+            cursor.execute("COMMIT")
+            
+            conn.close()
+            logger.info(f"Updated user {user_id} state to 'setup' in main bot database")
             
         except Exception as e:
-            logger.error(f"Error in donation confirmation process: {e}")
+            logger.error(f"Error updating user state to setup: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
     
     async def admin_actions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /admin_actions command - show recent admin actions"""
