@@ -1023,19 +1023,6 @@ Welcome to the comprehensive admin interface! Here you can:
             main_bot = Bot(token=self.main_bot_token)
             logger.info(f"Sending donation confirmation to user {user_id} via main bot")
             
-            # Instead of sending a command to the user, we'll send a special message
-            # that the main bot will recognize and process
-            await main_bot.send_message(
-                chat_id=int(user_id),
-                text="ADMIN_CONFIRM_DONATION",
-                parse_mode=None
-            )
-            logger.info(f"Sent ADMIN_CONFIRM_DONATION trigger to user {user_id} via main bot")
-            
-            # Add a small delay to ensure the message is processed
-            import asyncio
-            await asyncio.sleep(2)
-            
             # Send confirmation message to the user via main bot
             confirmation_message = """✅ Донат подтвержден!
 
@@ -1053,6 +1040,18 @@ Welcome to the comprehensive admin interface! Here you can:
                 parse_mode=None  # No markdown to avoid parsing errors
             )
             logger.info(f"Sent confirmation message to user {user_id}")
+            
+            # Add a small delay to ensure the message is processed
+            import asyncio
+            await asyncio.sleep(1)
+            
+            # Send the ADMIN_CONFIRM_DONATION trigger message
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text="ADMIN_CONFIRM_DONATION",
+                parse_mode=None
+            )
+            logger.info(f"Sent ADMIN_CONFIRM_DONATION trigger to user {user_id} via main bot")
             
         except Exception as e:
             logger.error(f"Error notifying user {user_id} of confirmation: {e}")
