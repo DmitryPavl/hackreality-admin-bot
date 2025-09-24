@@ -1023,15 +1023,16 @@ Welcome to the comprehensive admin interface! Here you can:
             main_bot = Bot(token=self.main_bot_token)
             logger.info(f"Sending donation confirmation to user {user_id} via main bot")
             
-            # Send the admin command to update user state to setup
+            # Instead of sending a command to the user, we'll send a special message
+            # that the main bot will recognize and process
             await main_bot.send_message(
                 chat_id=int(user_id),
-                text="/admin_update_state_to_setup",
-                parse_mode=None  # No markdown parsing for commands
+                text="ADMIN_CONFIRM_DONATION",
+                parse_mode=None
             )
-            logger.info(f"Sent /admin_update_state_to_setup command to main bot for user {user_id}")
+            logger.info(f"Sent ADMIN_CONFIRM_DONATION trigger to user {user_id} via main bot")
             
-            # Add a small delay to ensure the command is processed
+            # Add a small delay to ensure the message is processed
             import asyncio
             await asyncio.sleep(2)
             
