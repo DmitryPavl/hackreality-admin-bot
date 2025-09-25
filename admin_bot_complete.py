@@ -875,8 +875,8 @@ Welcome to the comprehensive admin interface! Here you can:
                 action_data=f"Admin confirmed donation for user {user_id}"
             )
             
-            # Update donation_confirmed field in main bot's database
-            await self._update_donation_confirmed_status(user_id, True)
+            # Update user state to proceed to setup in main bot's database
+            await self._update_user_state_to_setup(user_id)
             
             # Send confirmation to user via main bot
             await self._notify_user_donation_confirmed(user_id)
@@ -1011,139 +1011,6 @@ Welcome to the comprehensive admin interface! Here you can:
             logger.error(f"Error in admin_actions_command: {e}")
             await update.message.reply_text(f"❌ Error retrieving admin actions: {e}")
     
-    async def _update_donation_confirmed_status(self, user_id: str, confirmed: bool):
-        """Update donation_confirmed status using multiple approaches"""
-        try:
-            logger.info(f"Updating donation_confirmed to {confirmed} for user {user_id}")
-            
-            # Approach 1: Try direct database access first
-            success = await self._update_donation_confirmed_direct(user_id, confirmed)
-            if success:
-                logger.info(f"✅ Direct database update successful for user {user_id}")
-                return True
-            
-            # Approach 2: Try command-based communication
-            success = await self._update_donation_confirmed_command(user_id, confirmed)
-            if success:
-                logger.info(f"✅ Command-based update successful for user {user_id}")
-                return True
-            
-            # Approach 3: Try shared file approach
-            success = await self._update_donation_confirmed_file(user_id, confirmed)
-            if success:
-                logger.info(f"✅ File-based update successful for user {user_id}")
-                return True
-            
-            logger.error(f"❌ All update methods failed for user {user_id}")
-            return False
-            
-        except Exception as e:
-            logger.error(f"Error updating donation_confirmed status for user {user_id}: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            return False
-    
-    async def _update_donation_confirmed_direct(self, user_id: str, confirmed: bool):
-        """Try direct database access"""
-        try:
-            import sqlite3
-            import os
-            
-            # Try to find main bot database
-            possible_paths = [
-                os.path.join(os.path.dirname(__file__), '..', 'HackReality-MainBot', 'bot_database.db'),
-                '/app/bot_database.db',  # Heroku path
-                'bot_database.db'  # Current directory
-            ]
-            
-            for db_path in possible_paths:
-                if os.path.exists(db_path):
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    
-                    cursor.execute('''
-                        UPDATE user_states 
-                        SET donation_confirmed = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE user_id = ?
-                    ''', (int(confirmed), int(user_id)))
-                    
-                    conn.commit()
-                    conn.close()
-                    
-                    logger.info(f"Direct database update successful via {db_path}")
-                    return True
-            
-            logger.warning("Main bot database not found for direct access")
-            return False
-            
-        except Exception as e:
-            logger.warning(f"Direct database update failed: {e}")
-            return False
-    
-    async def _update_donation_confirmed_command(self, user_id: str, confirmed: bool):
-        """Try command-based communication"""
-        try:
-            from telegram import Bot
-            
-            if not self.main_bot_token:
-                logger.warning("MAIN_BOT_TOKEN not found for command-based update")
-                return False
-                
-            main_bot = Bot(token=self.main_bot_token)
-            
-            # Send a special command to the main bot
-            command = f"/admin_set_donation_confirmed_{user_id}_{int(confirmed)}"
-            
-            await main_bot.send_message(
-                chat_id=int(user_id),
-                text=command,
-                parse_mode=None
-            )
-            
-            logger.info(f"Command-based update sent: {command}")
-            return True
-            
-        except Exception as e:
-            logger.warning(f"Command-based update failed: {e}")
-            return False
-    
-    async def _update_donation_confirmed_file(self, user_id: str, confirmed: bool):
-        """Try shared file approach"""
-        try:
-            import json
-            import os
-            from datetime import datetime
-            
-            # Create a shared state file
-            state_file = "/tmp/donation_states.json"
-            
-            # Read existing states
-            states = {}
-            if os.path.exists(state_file):
-                try:
-                    with open(state_file, 'r') as f:
-                        states = json.load(f)
-                except:
-                    states = {}
-            
-            # Update the state
-            states[str(user_id)] = {
-                "donation_confirmed": confirmed,
-                "updated_at": datetime.now().isoformat(),
-                "updated_by": "admin_bot"
-            }
-            
-            # Write back to file
-            with open(state_file, 'w') as f:
-                json.dump(states, f, indent=2)
-            
-            logger.info(f"File-based update successful for user {user_id}")
-            return True
-            
-        except Exception as e:
-            logger.warning(f"File-based update failed: {e}")
-            return False
-
     async def _notify_user_donation_confirmed(self, user_id: str):
         """Notify user that their donation has been confirmed"""
         try:
@@ -1156,23 +1023,54 @@ Welcome to the comprehensive admin interface! Here you can:
             main_bot = Bot(token=self.main_bot_token)
             logger.info(f"Sending donation confirmation to user {user_id} via main bot")
             
-            # Send confirmation message to the user via main bot
-            confirmation_message = """✅ Донат подтвержден!
+            confirmation_message = """
+✅ **Донат подтвержден!**
 
 Спасибо за поддержку! Администратор подтвердил получение твоего доната.
 
-🎯 Теперь мы можем приступить к работе над твоей целью!
+🎯 **Теперь мы можем приступить к работе над твоей целью!**
 
 Переходим к настройке процесса... ⚙️
-
-🚀 Начинаем настройку!"""
+            """
             
+            # Send confirmation message to the user via main bot
             await main_bot.send_message(
                 chat_id=int(user_id),
                 text=confirmation_message,
-                parse_mode=None  # No markdown to avoid parsing errors
+                parse_mode='Markdown'
             )
             logger.info(f"Sent confirmation message to user {user_id}")
+            
+            # Add a small delay to ensure message order
+            import asyncio
+            await asyncio.sleep(1)
+            
+            # Send a special trigger message that main bot will recognize
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text="🚀 Начинаем настройку!",
+                parse_mode='Markdown'
+            )
+            logger.info(f"Sent setup trigger message to user {user_id}")
+            
+            # Add another small delay
+            await asyncio.sleep(1)
+            
+            # Send a hidden trigger message to start setup
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text="/start_setup",
+                parse_mode='Markdown'
+            )
+            logger.info(f"Sent /start_setup command to user {user_id}")
+            
+            # Also send a visible message to help debug
+            await main_bot.send_message(
+                chat_id=int(user_id),
+                text="🔧 Если настройка не началась автоматически, отправь команду /start_setup",
+                parse_mode='Markdown'
+            )
+            logger.info(f"Sent debug message to user {user_id}")
             
         except Exception as e:
             logger.error(f"Error notifying user {user_id} of confirmation: {e}")
